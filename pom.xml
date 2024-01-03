@@ -147,13 +147,12 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>${maven-compiler-plugin.version}</version>
                 <configuration>
-                    <source>17</source> <!-- Phiên bản nguồn của Java Compiler -->
-                    <target>17</target> <!-- Phiên bản đích của Java Compiler -->
+                    <source>${java.version}</source> <!-- Phiên bản nguồn của Java Compiler -->
+                    <target>${java.version}</target> <!-- Phiên bản đích của Java Compiler -->
                 </configuration>
             </plugin>
         </plugins>
     </build>
-
 </project>
