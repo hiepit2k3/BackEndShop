@@ -147,10 +147,12 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>${maven-compiler-plugin.version}</version>
+                <version>3.11.0</version>
                 <configuration>
-                    <source>${java.version}</source> <!-- Phiên bản nguồn của Java Compiler -->
-                    <target>${java.version}</target> <!-- Phiên bản đích của Java Compiler -->
+                    <release>17</release> <!-- Sử dụng release thay vì source và target -->
+                    <compilerArgs>
+                        <arg>--enable-preview</arg> <!-- Bật xem trước (preview) nếu bạn sử dụng tính năng mới của Java 17 -->
+                    </compilerArgs>
                 </configuration>
             </plugin>
         </plugins>
