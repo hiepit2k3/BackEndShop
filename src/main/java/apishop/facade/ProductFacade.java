@@ -46,7 +46,7 @@ public class ProductFacade {
 
                                                     SearchCriteria searchCriteria) throws ArchitectureException {
         Slice<ProductResponse> page =
-                productService.findAllWithFilter( searchCriteria);
+                productService. findAllWithFilter( searchCriteria);
         if (page.isEmpty()) {
             throw new EntityNotFoundException();
         }

@@ -37,7 +37,7 @@ public interface ProductRepository extends MongoRepository<Product, String> {
                     "            main_image: '$main_image',\n" +
                     "        }}"
     })
-    List<ProductResponse> product();
+    List<ProductResponse> product(Pageable pageable);
 
     @Aggregation({
             "{$lookup: {from: 'ProductVariant', localField: 'id', foreignField: 'product.id', as: 'product_variant'}}",

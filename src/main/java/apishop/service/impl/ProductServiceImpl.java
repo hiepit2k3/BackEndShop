@@ -94,7 +94,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Page<ProductResponse> findAllWithFilter(SearchCriteria searchCriteria) {
-        List<ProductResponse> productList = productRepository.product();
+        List<ProductResponse> productList = productRepository.product(getPageable(searchCriteria));
 
         for (ProductResponse productResponse : productList) {
             List<ProductVariant> productVariants = productVariantRepository.findAllByProductId(productResponse.getId());
@@ -121,10 +121,8 @@ public class ProductServiceImpl implements ProductService {
             productResponse.setImage(Base64.getEncoder().encodeToString(productResponse.getMain_image().getData()));
         }
         // Create a Pageable object
-        Pageable pageable = PageRequest.of(searchCriteria.getPage(), searchCriteria.getSize(), Sort.by("id").ascending());
-        Page<ProductResponse> productPage = new PageImpl<>(productList, pageable, productList.size());
-        System.out.println(productPage);
-        System.out.println(getPageable(searchCriteria));
+//        Pageable pageable = PageRequest.of(searchCriteria.getPage(), searchCriteria.getSize(), Sort.by("id").ascending());
+        Page<ProductResponse> productPage = new PageImpl<>(productList, getPageable(searchCriteria), productList.size());
         return productPage;
     }
     @Override

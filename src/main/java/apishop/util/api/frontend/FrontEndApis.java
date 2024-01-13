@@ -1,7 +1,7 @@
 package apishop.util.api.frontend;
 
 public class FrontEndApis {
-    public static final String BASE_URL_FRONT_END = "http://127.0.0.1:5173/";
+    public static final String BASE_URL_FRONT_END = "https://659668ad16bcb54aa17e286f--hilarious-halva-884ce6.netlify.app/";
 
     public static final String URL_LOGIN = BASE_URL_FRONT_END + "login?token=";
 
