@@ -24,12 +24,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static apishop.util.method.Search.getPageable;
 
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
+
     private final ProductRepository productRepository;
     private final ProductMapper productMapper;
     private final ProductVariantFacade productVariantFacade;
@@ -94,9 +96,12 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Page<ProductResponse> findAllWithFilter(SearchCriteria searchCriteria) {
-        List<ProductResponse> productList = productRepository.product(getPageable(searchCriteria));
+        Page<Product> pageProduct = productRepository.findAll(getPageable(searchCriteria));
+        System.out.println(pageProduct.getContent());
+        List<ProductResponse> productList = pageProduct.getContent().stream().map(productResponse -> {
 
-        for (ProductResponse productResponse : productList) {
+            ProductResponse productResponseNew = new ProductResponse();
+            System.out.println(productResponse.getId());
             List<ProductVariant> productVariants = productVariantRepository.findAllByProductId(productResponse.getId());
             Optional<Product> product = productRepository.findById(productResponse.getId());
             // tim discount
@@ -114,16 +119,21 @@ public class ProductServiceImpl implements ProductService {
                     .max(Double::compareTo)
                     .orElse(null);
             Integer quantity = productVariants.stream().mapToInt(ProductVariant::getQuantity).sum();
-            productResponse.setMax_price(maxPrice);
-            productResponse.setMin_price(minPrice);
-            productResponse.setQuantity(quantity);
-            productResponse.setDiscount(discount.map(Discount::getDiscount).orElse(0.0));
-            productResponse.setImage(Base64.getEncoder().encodeToString(productResponse.getMain_image().getData()));
-        }
-        // Create a Pageable object
-//        Pageable pageable = PageRequest.of(searchCriteria.getPage(), searchCriteria.getSize(), Sort.by("id").ascending());
-        Page<ProductResponse> productPage = new PageImpl<>(productList, getPageable(searchCriteria), productList.size());
-        return productPage;
+            productResponseNew.setMax_price(maxPrice);
+            productResponseNew.setMin_price(minPrice);
+            productResponseNew.setMin_price(minPrice);
+            productResponseNew.setQuantity(quantity);
+            productResponseNew.setDiscount(discount.map(Discount::getDiscount).orElse(0.0));
+            productResponseNew.setImage(Base64.getEncoder().encodeToString(productResponse.getImage().getData()));
+
+            // Thực hiện các thao tác khác để thiết lập các thuộc tính cho ProductResponse
+            return productResponseNew;
+        }).collect(Collectors.toList());
+
+// Tạo trang dữ liệu từ danh sách sản phẩm
+
+        Pageable pageable = PageRequest.of(searchCriteria.getPage(), searchCriteria.getSize(), Sort.by("id").ascending());
+        return new PageImpl<>(productList, pageable, pageProduct.getTotalElements());
     }
     @Override
     public ProductDtoRequest create(ProductDtoRequest productDtoRequest,

@@ -16,28 +16,28 @@ import java.util.List;
 @Repository
 public interface ProductRepository extends MongoRepository<Product, String> {
 
-    @Aggregation({
-            "{$lookup: {\n" +
-                    "            from: 'productVariants',\n" +
-                    "            localField: 'id',\n" +
-                    "            foreignField: 'product.id',\n" +
-                    "            as: 'productVariants'\n" +
-                    "        }}",
-            "{$unwind: '$productVariants'}",
-            "{$group: {\n" +
-                    "            _id: '$_id',\n" +
-                    "            name: { $first: '$name' },\n" +
-                    "            order_count: { $first: '$orderCount' },\n" +
-                    "            main_image: { $first: '$image' },\n" +
-                    "        }}",
-            "{$project: {\n" +
-                    "            id: '$_id',\n" +
-                    "            name: '$name',\n" +
-                    "            order_count: 1,\n" +
-                    "            main_image: '$main_image',\n" +
-                    "        }}"
-    })
-    List<ProductResponse> product(Pageable pageable);
+//    @Aggregation({
+//            "{$lookup: {\n" +
+//                    "            from: 'productVariants',\n" +
+//                    "            localField: 'id',\n" +
+//                    "            foreignField: 'product.id',\n" +
+//                    "            as: 'productVariants'\n" +
+//                    "        }}",
+//            "{$unwind: '$productVariants'}",
+//            "{$group: {\n" +
+//                    "            _id: '$_id',\n" +
+//                    "            name: { $first: '$name' },\n" +
+//                    "            order_count: { $first: '$orderCount' },\n" +
+//                    "            main_image: { $first: '$image' },\n" +
+//                    "        }}",
+//            "{$project: {\n" +
+//                    "            id: '$_id',\n" +
+//                    "            name: '$name',\n" +
+//                    "            order_count: 1,\n" +
+//                    "            main_image: '$main_image',\n" +
+//                    "        }}"
+//    })
+//    List<ProductResponse> product(Pageable pageable);
 
     @Aggregation({
             "{$lookup: {from: 'ProductVariant', localField: 'id', foreignField: 'product.id', as: 'product_variant'}}",
