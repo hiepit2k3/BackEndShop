@@ -35,16 +35,16 @@ public class OrderServiceImpl implements OrderService {
     //region
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
-    private final VoucherOfAccountService voucherOfAccountService;
-    private final ProductVariantFacade productVariantFacade;
-    private final OrderDetailFacade orderDetailFacade;
-    private final MailService mailService;
-    private final OrderDetailMapper orderDetailMapper;
-    private final DeliveryAddressMapper deliveryAddressMapper;
-    private final PaymentMapper paymentMapper;
-    private final AccountMapper accountMapper;
-    private final VoucherMapper voucherMapper;
-    private final OrderDetailRepository orderDetailRepository;
+        private final VoucherOfAccountService voucherOfAccountService;
+        private final ProductVariantFacade productVariantFacade;
+        private final OrderDetailFacade orderDetailFacade;
+        private final MailService mailService;
+        private final OrderDetailMapper orderDetailMapper;
+        private final DeliveryAddressMapper deliveryAddressMapper;
+        private final PaymentMapper paymentMapper;
+        private final AccountMapper accountMapper;
+        private final VoucherMapper voucherMapper;
+        private final OrderDetailRepository orderDetailRepository;
 
     @Override
     public Page<OrderDtoRequest> findAllByAccountIdAndTypeOrder(String accountId,
@@ -114,46 +114,38 @@ public class OrderServiceImpl implements OrderService {
                                 Payment payment,
                                 Account account,
                                 Voucher voucher,
-                                DeliveryAddress deliveryAddress
-    ) throws ArchitectureException, MessagingException {
+                                DeliveryAddress deliveryAddress) throws ArchitectureException, MessagingException {
         double total = orderDtoRequest.getOrderDto().getTotal();
         double discount = 0;
 
-        // Xóa voucher được áp dụng
-        if (voucher != null) {
-            if (!voucherOfAccountService.updateIsUsed(account.getId(), voucher.getId())
-                    || voucher.getRegisterDate().after(new Date()))
-                throw new DescriptionException("Voucher is used or cannot be used yet");
-            if (total > voucher.getMinTotal()) {
-                if (voucher.getTypeDiscount() == TypeDiscount.PERCENT) {
-                    discount = total * voucher.getDiscount();
-                    if (discount > voucher.getMaxDiscount()) {
-                        discount = voucher.getMaxDiscount();
-                    }
-                } else {
-                    discount = voucher.getDiscount();
-                }
-            }
+        // Xử lý voucher
+        if (voucher != null && isValidVoucher(voucher, account, total)) {
+            discount = calculateDiscount(total, voucher);
         }
-        Order order = orderRepository.save(
-                orderMapper.applyToOrder(
-                        orderDtoRequest.getOrderDto(),
-                        payment,
-                        account,
-                        voucher,
-                        deliveryAddress));
-        //
+
+        // Lưu order
+        Order order = orderRepository.save(orderMapper.applyToOrder(orderDtoRequest.getOrderDto(), payment, account, voucher, deliveryAddress));
+
+        // Cập nhật orderDtoRequest
         orderDtoRequest.setOrderDto(orderMapper.apply(order));
+        orderDtoRequest.setOrderDetailsDto(saveOrderDetailsAndQuantity(order, orderDtoRequest.getOrderDetailsDto()));
 
-        List<OrderDetailDto> orderDetailDtoList =
-                saveOrderDetailsAndQuantity(order, orderDtoRequest.getOrderDetailsDto());
+        // Gửi email
+        mailService.sendOrderEmail(order.getAccount().getEmail(), order, orderDtoRequest.getOrderDetailsDto(), discount);
 
-        orderDtoRequest.setOrderDetailsDto(orderDetailDtoList);
-
-        mailService.sendOrderEmail(order.getAccount().getEmail(),
-                order, orderDetailDtoList, discount);
         return orderDtoRequest;
+    }
 
+    private boolean isValidVoucher(Voucher voucher, Account account, double total) throws DescriptionException {
+        if (!voucherOfAccountService.updateIsUsed(account.getId(), voucher.getId()) || voucher.getRegisterDate().after(new Date())) {
+            throw new DescriptionException("Voucher is used or cannot be used yet");
+        }
+        return total > voucher.getMinTotal();
+    }
+
+    private double calculateDiscount(double total, Voucher voucher) {
+        double discount = (voucher.getTypeDiscount() == TypeDiscount.PERCENT) ? total * voucher.getDiscount() : voucher.getDiscount();
+        return Math.min(discount, voucher.getMaxDiscount());
     }
 
     @Override
@@ -218,14 +210,11 @@ public class OrderServiceImpl implements OrderService {
             // lấy từ database và đã kiểm tra ở Facade
             ProductVariant productVariant = productVariantFacade.getEntity(orderDetailDto.getProductVariantId());
             Integer quantity = orderDetailDto.getQuantity();
-
             productVariant.setQuantity(productVariant.getQuantity() - quantity);
             productVariants.add(productVariant);
             Product product = productVariant.getProduct();
             product.setOrderCount(product.getOrderCount() == null ? quantity : product.getOrderCount() + quantity);
-
         }
-
         return orderDetailFacade.saveAll(orderDetailDtoList, productVariants, order);
     }
 }

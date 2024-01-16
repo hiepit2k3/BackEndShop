@@ -68,7 +68,7 @@ public class ProductServiceImpl implements ProductService {
                 productVariantMapper.applyAll(t);
         List<HashtagDto> hashtagDtos = new ArrayList<>();
         List<HashtagOfProduct> hashtagOfProducts = hashtagOfProductRepository.findAllByProductId(id);
-        for (HashtagOfProduct hash : hashtagOfProducts){
+        for (HashtagOfProduct hash : hashtagOfProducts) {
             hashtagDtos.add(hashtagService.findHashtagById(hash.getHashtag().getId()));
         }
         // Lấy brand và category
@@ -96,45 +96,34 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Page<ProductResponse> findAllWithFilter(SearchCriteria searchCriteria) {
-        Page<Product> pageProduct = productRepository.findAll(getPageable(searchCriteria));
-        System.out.println(pageProduct.getContent());
-        List<ProductResponse> productList = pageProduct.getContent().stream().map(productResponse -> {
+        Slice<ProductResponse> productList = productRepository.product(getPageable(searchCriteria));
+        productList.getContent().parallelStream().forEach(productResponse -> {
+            byte[] imageData = productResponse.getMain_image().getData();
+            String base64Image = Base64.getEncoder().encodeToString(imageData);
+            productResponse.setImage(base64Image);
 
-            ProductResponse productResponseNew = new ProductResponse();
-            System.out.println(productResponse.getId());
             List<ProductVariant> productVariants = productVariantRepository.findAllByProductId(productResponse.getId());
-            Optional<Product> product = productRepository.findById(productResponse.getId());
-            // tim discount
+
             Date date = new Date();
-            Optional<Discount> discount = discountRepository.findByCategoryIdIsActived(product.get().getCategory().getId(),date);
-            System.out.println(discount);
-            // Lấy min và max từ trường price của danh sách ProductVariant
-            Double minPrice = productVariants.stream()
-                    .map(ProductVariant::getPrice)
-                    .min(Double::compareTo)
-                    .orElse(null);
+            Optional<Discount> discount = discountRepository.findByCategoryIdIsActived(productResponse.getId(), date);
 
-            Double maxPrice = productVariants.stream()
-                    .map(ProductVariant::getPrice)
-                    .max(Double::compareTo)
-                    .orElse(null);
-            Integer quantity = productVariants.stream().mapToInt(ProductVariant::getQuantity).sum();
-            productResponseNew.setMax_price(maxPrice);
-            productResponseNew.setMin_price(minPrice);
-            productResponseNew.setMin_price(minPrice);
-            productResponseNew.setQuantity(quantity);
-            productResponseNew.setDiscount(discount.map(Discount::getDiscount).orElse(0.0));
-            productResponseNew.setImage(Base64.getEncoder().encodeToString(productResponse.getImage().getData()));
+            double productDiscount = discount.map(Discount::getDiscount).orElse(0.0);
 
-            // Thực hiện các thao tác khác để thiết lập các thuộc tính cho ProductResponse
-            return productResponseNew;
-        }).collect(Collectors.toList());
+            int totalQuantity = productVariants.parallelStream().mapToInt(ProductVariant::getQuantity).sum();
+            double minPrice = productVariants.parallelStream().map(ProductVariant::getPrice).min(Double::compareTo).orElse(0.0);
+            double maxPrice = productVariants.parallelStream().map(ProductVariant::getPrice).max(Double::compareTo).orElse(0.0);
 
-// Tạo trang dữ liệu từ danh sách sản phẩm
-
-        Pageable pageable = PageRequest.of(searchCriteria.getPage(), searchCriteria.getSize(), Sort.by("id").ascending());
-        return new PageImpl<>(productList, pageable, pageProduct.getTotalElements());
+            productResponse.setDiscount(productDiscount);
+            productResponse.setQuantity(totalQuantity);
+            productResponse.setMin_price(minPrice);
+            productResponse.setMax_price(maxPrice);
+        });
+        long count  = productRepository.count();
+        Page<ProductResponse> productPage = new PageImpl<>(productList.getContent(), getPageable(searchCriteria),count);
+        return productPage;
     }
+
+
     @Override
     public ProductDtoRequest create(ProductDtoRequest productDtoRequest,
                                     Category category,
@@ -152,9 +141,9 @@ public class ProductServiceImpl implements ProductService {
         List<MultipartFile> imagesProductVariants = files.subList(1, files.size());
         // Lưu productVariant và image của chúng
         List<ProductVariantDto> productVariantsDto =
-                productVariantFacade.createAll( productDtoRequest.getProductVariantsDto(),
-                                                imagesProductVariants,
-                                                product
+                productVariantFacade.createAll(productDtoRequest.getProductVariantsDto(),
+                        imagesProductVariants,
+                        product
                 );
 
         productDtoRequest.setProductVariantsDto(productVariantsDto);
@@ -179,18 +168,18 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(rollbackFor = ArchitectureException.class)
     @Override
     public ProductDto update(List<PVRequest> pvRequest,
-                                    ProductDto productDto,
-                                    MultipartFile mainImage,
-                                    List<HashtagOfProductDto> hashtagOfProductsDto,
-                                    String productId,
-                                    Category category,
-                                    Brand brand) throws ArchitectureException, IOException {
+                             ProductDto productDto,
+                             MultipartFile mainImage,
+                             List<HashtagOfProductDto> hashtagOfProductsDto,
+                             String productId,
+                             Category category,
+                             Brand brand) throws ArchitectureException, IOException {
         // Lưu product và image của nó
         Product product = productRepository
                 .save(productMapper
                         .applyToProduct(productDto,
-                                        category,
-                                        brand));
+                                category,
+                                brand));
 
         productVariantFacade.update(pvRequest, product);
         hashtagOfProductFacade.createAll(hashtagOfProductsDto, product, true);

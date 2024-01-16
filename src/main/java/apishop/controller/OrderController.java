@@ -31,7 +31,6 @@ public class OrderController {
     public ResponseEntity<Object> create(@RequestBody
             OrderDtoRequest orderDtoRequest
     ) throws ArchitectureException, MessagingException {
-        System.out.println(orderDtoRequest);
         return ResponseHandler.response(HttpStatus.OK,
                 orderFacade.save(orderDtoRequest),true);
     }

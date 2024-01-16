@@ -6,6 +6,7 @@ import apishop.exception.common.ForeignKeyIsNotFound;
 import apishop.exception.common.IdMustBeNullException;
 import apishop.exception.common.InvalidParamException;
 import apishop.exception.core.ArchitectureException;
+import apishop.exception.core.OrderProcessor;
 import apishop.exception.entity.EntityNotFoundException;
 import apishop.model.dto.OrderDto;
 import apishop.model.dto.OrderIdentity;
@@ -32,6 +33,9 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static apishop.util.method.Authentication.getAccount;
 import static apishop.util.vnpay.ConstantsVNPay.URL_RETURN_FRONTEND;
@@ -46,6 +50,7 @@ public class OrderFacade {
     private final DeliveryAddressRepository deliveryAddressRepository;
     private final OrderRepository orderRepository;
     private final VnPayService vnPayService;
+    private final OrderProcessor orderProcessor;
 
     public Page<OrderDtoRequest> findByAllOrders(SearchCriteria searchCriteria,
                                                  TypeOrder typeOrder) throws ArchitectureException {
@@ -78,31 +83,75 @@ public class OrderFacade {
         return dto;
     }
 
-    public OrderDtoRequest save(OrderDtoRequest orderDtoRequest
-    ) throws ArchitectureException, MessagingException {
+    public OrderDtoRequest save(OrderDtoRequest orderDtoRequest) throws ArchitectureException, MessagingException {
+        validateOrderDto(orderDtoRequest);
 
-        if(orderDtoRequest.getOrderDto().getId() != null)
-            throw new IdMustBeNullException(Order.class.getSimpleName());
+        ExecutorService executorService = Executors.newFixedThreadPool(3);
+
+        CompletableFuture<Payment> paymentFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return getPayment(orderDtoRequest.getOrderDto().getPaymentId());
+            } catch (ForeignKeyIsNotFound e) {
+                throw new RuntimeException(e);
+            }
+        }, executorService);
+
+        CompletableFuture<DeliveryAddress> deliveryAddressFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return getDeliveryAddress(orderDtoRequest.getOrderDto().getDeliveryAddressId());
+            } catch (ForeignKeyIsNotFound e) {
+                throw new RuntimeException(e);
+            }
+        }, executorService);
+
+        CompletableFuture<Voucher> voucherFuture = CompletableFuture.supplyAsync(() ->
+                getVoucher(orderDtoRequest.getOrderDto().getVoucherId()), executorService);
+
+        CompletableFuture<Void> allOf = CompletableFuture.allOf(paymentFuture, deliveryAddressFuture, voucherFuture);
+
+        allOf.join(); // Chờ tất cả các tác vụ hoàn thành
 
         Account account = getAccount();
-        Optional<Payment> payment = paymentRepository
-                .findById(orderDtoRequest.getOrderDto().getPaymentId());
-        Optional<DeliveryAddress> deliveryAddress =
-                deliveryAddressRepository.findById(orderDtoRequest.getOrderDto().getDeliveryAddressId());
+        Payment payment = paymentFuture.join();
+        DeliveryAddress deliveryAddress = deliveryAddressFuture.join();
+        Voucher voucher = voucherFuture.join();
 
-        String voucherId = orderDtoRequest.getOrderDto().getVoucherId();
-        Voucher voucher = (voucherId != null)
-                ? voucherRepository.findById(voucherId).orElse(null) : null;
+        CompletableFuture<OrderDtoRequest> completableFuture = CompletableFuture.supplyAsync(() ->
+        {
+            try {
+                return orderProcessor.saveAsync(orderDtoRequest, payment, account, voucher, deliveryAddress).join();
+            } catch (ArchitectureException e) {
+                throw new RuntimeException(e);
+            } catch (MessagingException e) {
+                throw new RuntimeException(e);
+            }
+        }, executorService);
 
-        if(payment.isEmpty() || deliveryAddress.isEmpty())
-            throw new ForeignKeyIsNotFound("PaymentId Or Delivery Address");
-
-        return orderService.save(orderDtoRequest,
-                                 payment.get(),
-                                 account,
-                                 voucher,
-                                 deliveryAddress.get());
+        return completableFuture.join();
     }
+
+    private void validateOrderDto(OrderDtoRequest orderDtoRequest) throws IdMustBeNullException {
+        if (orderDtoRequest.getOrderDto().getId() != null) {
+            throw new IdMustBeNullException(Order.class.getSimpleName());
+        }
+    }
+
+    private Payment getPayment(String paymentId) throws ForeignKeyIsNotFound {
+        return paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ForeignKeyIsNotFound("PaymentId"));
+    }
+
+    private DeliveryAddress getDeliveryAddress(String deliveryAddressId) throws ForeignKeyIsNotFound {
+        return deliveryAddressRepository.findById(deliveryAddressId)
+                .orElseThrow(() -> new ForeignKeyIsNotFound("Delivery Address"));
+    }
+
+    private Voucher getVoucher(String voucherId) {
+        return (voucherId != null) ? voucherRepository.findById(voucherId).orElse(null) : null;
+    }
+
+// Assuming getAccount() and other necessary methods are implemented elsewhere
+
 
     public OrderDto updateTypeOrder(String id, TypeOrder typeOrder) throws ArchitectureException, MessagingException {
         Optional<Order> order = orderRepository.findById(id);
@@ -123,20 +172,22 @@ public class OrderFacade {
         }
     }
 
-    public String payment(String orderId,
-                        HttpServletRequest request) throws IOException, ArchitectureException {
+        public String payment(String orderId,
+                            HttpServletRequest request) throws IOException, ArchitectureException {
 
-        OrderDto orderDto = orderService.findOrderById(orderId);
-        Account account = getAccount();
-        if(orderDto == null) throw new EntityNotFoundException();
-        // nếu order đã thanh toán hoặc không phải của account đang đăng nhập
-        if(!(orderDto.getTypeOrder() == TypeOrder.WAIT_TO_PAY) ||
-                orderDto.getAccountId() != account.getId())
-            throw new DescriptionException("This order maybe has been paid or isn't your order");
-
-        int total = orderDto.getTotal().intValue() * 24000;
-        return vnPayService.create(total,
-                orderDto.getId(),
-                request);
-    }
+            OrderDto orderDto = orderService.findOrderById(orderId);
+            Account account = getAccount();
+            if(orderDto == null) throw new EntityNotFoundException();
+            System.out.println("Data từ đơn hàng: "+orderDto.getAccountId());
+            System.out.println("Data từ người dùng thanh toán: "+orderDto.getAccountId());
+            System.out.println("Trạng thái đơn hàng: "+orderDto.getTypeOrder());
+            // nếu order đã thanh toán hoặc không phải của account đang đăng nhập
+            if(orderDto.getTypeOrder() != TypeOrder.WAIT_TO_PAY && orderDto.getTypeOrder() != TypeOrder.PENDING||
+                    !orderDto.getAccountId().equals(account.getId()))
+                throw new DescriptionException("This order maybe has been paid or isn't your order");
+            int total = orderDto.getTotal().intValue() * 24000;
+            return vnPayService.create(total,
+                    orderDto.getId(),
+                    request);
+        }
 }

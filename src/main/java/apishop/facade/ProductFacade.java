@@ -41,12 +41,12 @@ public class ProductFacade {
     private final CategoryRepository categoryRepository;
     private final BrandRepository brandRepository;
 
-    public Slice<ProductResponse> findAllWithFilter(String categoryId,
+    public Page<ProductResponse> findAllWithFilter(String categoryId,
                                                     String brandId,
 
                                                     SearchCriteria searchCriteria) throws ArchitectureException {
-        Slice<ProductResponse> page =
-                productService. findAllWithFilter( searchCriteria);
+        Page<ProductResponse> page =
+                productService.findAllWithFilter( searchCriteria);
         if (page.isEmpty()) {
             throw new EntityNotFoundException();
         }
