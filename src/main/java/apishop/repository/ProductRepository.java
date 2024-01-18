@@ -16,57 +16,6 @@ import java.util.List;
 @Repository
 public interface ProductRepository extends MongoRepository<Product, String> {
 
-//    @Aggregation({
-//            "{$lookup: {\n" +
-//                    "            from: 'productVariants',\n" +
-//                    "            localField: 'id',\n" +
-//                    "            foreignField: 'product.id',\n" +
-//                    "            as: 'productVariants'\n" +
-//                    "        }}",
-//            "{$unwind: '$productVariants'}",
-//            "{$group: {\n" +
-//                    "            _id: '$_id',\n" +
-//                    "            name: { $first: '$name' },\n" +
-//                    "            order_count: { $first: '$orderCount' },\n" +
-//                    "            main_image: { $first: '$image' },\n" +
-//                    "        }}",
-//            "{$project: {\n" +
-//                    "            id: '$_id',\n" +
-//                    "            name: '$name',\n" +
-//                    "            order_count: 1,\n" +
-//                    "            main_image: '$main_image',\n" +
-//                    "        }}"
-//    })
-//    List<ProductResponse> product(Pageable pageable);
-
-    //    @Aggregation({
-//            "{$lookup: {" +
-//                    "from: 'productVariants'," +
-//                    "localField: 'id'," +
-//                    "foreignField: 'product.id'," +
-//                    "as: 'productVariants'" +
-//                    " }}",
-//            "{$unwind: '$productVariants'}",
-//            "{$group: {" +
-//                    "_id: {" +
-//                        "productId: '$id'," +
-//                        "name: '$name'," +
-//                        "order_count: '$orderCount'," +
-//                        "main_image: '$image'" +
-//                    "}," +
-//                    "min_price: { $min: '$productVariants.price' }, " +
-//                    "max_price: { $max: '$productVariants.price' }" +
-//                    "}}",
-//            "{$project: {" +
-//                    "_id:0," +
-//                    "id:'$_id.productId'," +
-//                    "name:'$_id.name'," +
-//                    "order_count:'$_id.order_count'," +
-//                    "main_image:'$_id.main_image'," +
-//                    "min_price:1," +
-//                    "max_price:1" +
-//                    "}}"
-//    })
     @Aggregation({
             "{$lookup: {" +
                     "from: 'productVariants'," +
